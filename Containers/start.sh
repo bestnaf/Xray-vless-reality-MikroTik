@@ -125,10 +125,10 @@ chmod 755 /tmp/xray/xray
 7z x /opt/tun2socks/tun2socks.7z -o/tmp/tun2socks/ -y >/dev/null
 chmod 755 /tmp/tun2socks/tun2socks
 
-# # --- just before "Start Xray core" ---
-# export XRAY_LOCATION_ASSET=/opt/xray/geo
-# ln -sf /opt/xray/geo/geosite.dat /tmp/xray/geosite.dat 2>/dev/null || true
-# ln -sf /opt/xray/geo/geoip.dat   /tmp/xray/geoip.dat   2>/dev/null || true
+# --- just before "Start Xray core" ---
+export XRAY_LOCATION_ASSET=/opt/xray/geo
+ln -sf /opt/xray/geo/geosite.dat /tmp/xray/geosite.dat 2>/dev/null || true
+ln -sf /opt/xray/geo/geoip.dat   /tmp/xray/geoip.dat   2>/dev/null || true
 
 echo "Start Xray core"
 /tmp/xray/xray run -config /opt/xray/config/config.json &
