@@ -36,7 +36,9 @@ add disabled=no fib name=r_to_vpn
 Добавим address-list "to_vpn" что бы находившиеся в нём IP адреса и подсети заворачивать в пока ещё не созданный туннель
 ```
 /ip firewall address-list
+add address 0.0.0.0/1 list=to_vpn
 ```
+можно не добавлять все адреса сразу а добавить только 8.8.8.8 для проверки
 
 Добавим address-list "RFC1918" что бы не потерять доступ до RouterOS при дальнейшей настройке
 ```
@@ -45,8 +47,8 @@ add address=10.0.0.0/8 list=RFC1918
 add address=172.16.0.0/12 list=RFC1918
 add address=192.168.0.0/16 list=RFC1918
 ```
-## ЕЩЕ НУЖНО БУДЕТ ПОТОМ ДОБАВИТЬ В ЭТОТ ЖЕ СПИСОК, IP АДРЕС ВАШЕГО VPN VLESS ДЛЯ ДОСТУПА ТУДА НАПРЯМУЮ
-## ТАК ЖЕ, для полного роута всего трафика нужно писать в листе to_vpn адрес 0.0.0.0/1
+ЕЩЕ НУЖНО БУДЕТ ПОТОМ ДОБАВИТЬ В ЭТОТ ЖЕ СПИСОК, IP АДРЕС ВАШЕГО VPN VLESS ДЛЯ ДОСТУПА ТУДА НАПРЯМУЮ
+
 
 Добавим правила в mangle для address-list "RFC1918" и переместим его в самый верх правил
 ```
@@ -246,3 +248,54 @@ add key=SPIDER_X name=xvr value=/
 :fire::fire::fire: Поздравляю! Настройка завершена.
  
 По желанию логирование контейнера можно отключить что бы не засорялся лог RouteOS.
+
+
+Чтобы разрешить fallback на обычный канал в случае недоступности контейнера нужно сделать
+```
+# BYPASS internal / mgmt subnets (stay local)
+# add whatever LANs you have; these never use the VPN
+/routing/rule/add action=lookup-only-in-table dst-address=192.168.0.0/16 table=main comment="Bypass: RFC1918 to main"
+
+# BYPASS the container link and the Xray server itself
+/routing/rule/add action=lookup-only-in-table dst-address=172.18.20.4/30 table=main comment="Bypass: veth /30"
+/routing/rule/add action=lookup-only-in-table dst-address=38.244.170.102/32 table=main comment="Bypass: Xray server"
+
+# SEND LAN -> try VPN first (use *lookup*, not lookup-only-in-table, to allow fallback)
+/routing/rule/add action=lookup src-address=192.168.5.0/24 table=r_to_vpn comment="LAN -> try VPN"
+
+# FALLBACK: if r_to_vpn has no usable default, use main
+/routing/rule/add action=lookup src-address=192.168.5.0/24 table=main comment="LAN -> fallback to main"
+```
+```
+# preferred (ROS v7)
+/ip/firewall/nat/add chain=srcnat action=masquerade routing-table=r_to_vpn comment="NAT via Xray container"
+# if your build doesn’t support routing-table match, use this instead:
+# /ip/firewall/nat/add chain=srcnat action=masquerade out-interface=docker-xray-vless-veth comment="NAT via Xray container"
+```
+```
+/ip/firewall/filter/disable 9
+/ip/firewall/filter/disable 15
+/ip/firewall/filter/add chain=forward action=fasttrack-connection hw-offload=yes \
+  connection-state=established,related out-interface=!docker-xray-vless-veth \
+  comment="FastTrack except VPN path"
+```
+```
+# Remove prior MSS rule(s) targeting the veth and add this one:
+/ip/firewall/mangle/remove [find where chain=forward action=change-mss out-interface=docker-xray-vless-veth]
+/ip/firewall/mangle/add chain=forward protocol=tcp tcp-flags=syn out-interface=docker-xray-vless-veth \
+  action=change-mss new-mss=clamp-to-pmtu comment="Clamp MSS for VPN path (veth)"
+```
+
+Можно добавить простой watchdog скрипт
+```
+/system/script/add name=vpn-watchdog policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source="
+:local rId [/ip/route find where routing-table=\"r_to_vpn\" dst-address=\"0.0.0.0/0\"];
+/tool/fetch url=\"http://1.1.1.1\" routing-table=r_to_vpn output=none keep-result=no mode=http;
+:if (\$status != \"finished\") do={
+  /ip/route disable \$rId;
+  :delay 30s;
+  /ip/route enable \$rId;
+}
+"
+/system/scheduler/add name=vpn-watchdog interval=1m on-event=vpn-watchdog
+```
