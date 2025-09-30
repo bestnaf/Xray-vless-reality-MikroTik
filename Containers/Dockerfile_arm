@@ -12,6 +12,10 @@ COPY ./tun2socks/tun2socks-linux-armv7.7z /opt/tun2socks/tun2socks.7z
 #Xray core
 RUN mkdir /opt/xray/
 RUN mkdir /opt/xray/config/
+RUN mkdir /opt/xray/geo/
+#Geofiles
+COPY ./geo/geoip.dat /opt/xray/geo/geoip.dat
+COPY ./geo/geosite.dat /opt/xray/geo/geosite.dat
 COPY ./xray-core/Xray-linux-arm32-v7a.7z /opt/xray/xray.7z
 
 COPY ./start.sh /opt/start.sh
