@@ -205,7 +205,7 @@ add key=FINGERPRINT_FP name=xvr value=chrome
 add key=SERVER_NAME_SNI name=xvr value=apple.com
 add key=PUBLIC_KEY_PBK name=xvr value=fTndnleCTkK9_jtpwCAdxtEwJUkQ22oY1W8dTza2xHs
 add key=SHORT_ID_SID name=xvr value=29d2d3d5a398
-add key=FLOW name=xvr value=flow-value
+add key=FLOW name=xvr value=xtls-rprx-vision
 add key=SPIDER_X name=xvr value=/
 ```
 
