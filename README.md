@@ -52,6 +52,8 @@ add address=10.0.0.0/8 list=RFC1918
 add address=172.16.0.0/12 list=RFC1918
 add address=192.168.0.0/16 list=RFC1918
 ```
+ЕЩЕ НУЖНО БУДЕТ ПОТОМ ДОБАВИТЬ В ЭТОТ ЖЕ СПИСОК, IP АДРЕС ВАШЕГО VPN VLESS ДЛЯ ДОСТУПА ТУДА НАПРЯМУЮ
+ТАК ЖЕ, для полного роута всего трафика нужно писать в листе to_vpn адрес 0.0.0.0/1
 
 Добавим правила в mangle для address-list "RFC1918" и переместим его в самый верх правил
 ```
@@ -203,6 +205,8 @@ add key=FINGERPRINT_FP name=xvr value=chrome
 add key=SERVER_NAME_SNI name=xvr value=apple.com
 add key=PUBLIC_KEY_PBK name=xvr value=fTndnleCTkK9_jtpwCAdxtEwJUkQ22oY1W8dTza2xHs
 add key=SHORT_ID_SID name=xvr value=29d2d3d5a398
+add key=FLOW name=xvr value=flow-value
+add key=SPIDER_X name=xvr value=/
 ```
 
 7) Теперь создадим сам контейнер. Здесь вам нужно выбрать репозиторий из [Docker Hub](https://hub.docker.com/u/catesin) с архитектурой под ваше устройство.
@@ -225,6 +229,12 @@ add key=SHORT_ID_SID name=xvr value=29d2d3d5a398
 
 :anger:
 Контейнер будет использовать только локальный DNS сервер на IP адресе 172.18.20.5. Необходимо разрешить DNS запросы TCP/UDP порт 53 на данный IP в правилах RouterOS в разделе ```/ip firewall filter```
+
+Включить DNS-сервер на RouterOS:
+
+/ip dns set servers=1.1.1.1,8.8.8.8 allow-remote-requests=yes
+
+Убедиться, что firewall forward разрешает src=172.18.20.6 dst=172.18.20.5 proto=udp/tcp port=53.
 
 8) Запускаем контейнер через WinBox в разделе меню Winbox "container". В логах MikroTik вы увидите характерные сообщения о запуске контейнера. 
 
@@ -326,18 +336,21 @@ nano /opt/start.sh
 
 В содержимое скрипта подставьте конфигурацию клиента для Xray из 3x-ui заполнив следующие переменные. 
 
-| Переменная | Пример значения (у вас должны быть свои) | Пояснение | 
-|:----------:|:----------:|:----------:|
-| SERVER_ADDRESS    | myhost.com   | Конфигурация Xray клиента  |
-| SERVER_PORT    | 443   | Конфигурация Xray клиента  |
-| USER_ID    | e3203dfe-9s62-4de5-bf9b-ecd36c9af225   | Конфигурация Xray клиента  |
-| ENCRYPTION    | none   | Конфигурация Xray клиента  |
-| FINGERPRINT_FP    | chrome   | Конфигурация Xray клиента  |
-| SERVER_NAME_SNI    | apple.com   | Конфигурация Xray клиента  |
-| PUBLIC_KEY_PBK    | fTndnleCTkK9_jtpwCAdxtEwJUkQ22oY1W8dTza2xHs   | Конфигурация Xray клиента  |
-| SHORT_ID_SID    | 29d2d3d5a398   | Конфигурация Xray клиента  |
-| GATEWAY    | 172.18.20.5   | IP шлюз по-умолчанию в Linux (подсмотреть через ```ip r```)|
-| ADAPTER_NAME    | eth0   | Название физического адаптера в Linux (подсмотреть через ```ip a```) |
+
+|   Переменная    |  Пример значения (у вас должны быть свои)   | Пояснение | 
+|:---------------:|:-------------------------------------------:|:----------:|
+| SERVER_ADDRESS  |                 myhost.com                  | Конфигурация Xray клиента  |
+|   SERVER_PORT   |                     443                     | Конфигурация Xray клиента  |
+|     USER_ID     |    e3203dfe-9s62-4de5-bf9b-ecd36c9af225     | Конфигурация Xray клиента  |
+|   ENCRYPTION    |                    none                     | Конфигурация Xray клиента  |
+| FINGERPRINT_FP  |                   chrome                    | Конфигурация Xray клиента  |
+| SERVER_NAME_SNI |                  apple.com                  | Конфигурация Xray клиента  |
+| PUBLIC_KEY_PBK  | fTndnleCTkK9_jtpwCAdxtEwJUkQ22oY1W8dTza2xHs | Конфигурация Xray клиента  |
+|  SHORT_ID_SID   |                29d2d3d5a398                 | Конфигурация Xray клиента  |
+|      FLOW       |                 flow-value                  | Конфигурация Xray клиента  |
+|    SPIDER_X     |                  spx-value                  | Конфигурация Xray клиента  |
+|     GATEWAY     |                 172.18.20.5                 | IP шлюз по-умолчанию в Linux (подсмотреть через ```ip r```)|
+|  ADAPTER_NAME   |                    eth0                     | Название физического адаптера в Linux (подсмотреть через ```ip a```) |
 
 ```
 #!/bin/sh
@@ -357,6 +370,8 @@ PUBLIC_KEY_PBK=***
 SHORT_ID_SID=***
 GATEWAY=***
 ADAPTER_NAME=***
+FLOW=***
+SPIDER_X=***
 
 
 # Получение IP-адреса
@@ -422,6 +437,7 @@ cat <<EOF > /opt/xray/config/config.json
               {
                 "id": "$USER_ID",
                 "encryption": "$ENCRYPTION",
+				"flow": "$FLOW",
                 "alterId": 0
               }
             ]
@@ -435,7 +451,7 @@ cat <<EOF > /opt/xray/config/config.json
           "fingerprint": "$FINGERPRINT_FP",
           "serverName": "$SERVER_NAME_SNI",
           "publicKey": "$PUBLIC_KEY_PBK",
-          "spiderX": "",
+ 	      "spiderX": "$SPIDER_X",
           "shortId": "$SHORT_ID_SID"
         }
       },
